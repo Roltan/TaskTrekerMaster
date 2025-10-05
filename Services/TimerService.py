@@ -1,9 +1,18 @@
-from datetime import datetime, timedelta
+from datetime import datetime
+from Services.DatabaseService import DatabaseService
 
 class TimerService:
     def __init__(self):
-        self.time_tracker = {}
+        self.db = DatabaseService()
+        self._sync_memory_with_db()
         self.active_timer = None
+        self.active_sessions = {}
+    
+    def _sync_memory_with_db(self):
+        """Синхронизация памяти с данными из БД"""
+        self.time_tracker = self.db.get_today_timers()
+        # Получаем активные сессии из БД
+        self.active_sessions = self.db.get_active_sessions()
     
     def get_reply_keyboard(self):
         from telegram import KeyboardButton, ReplyKeyboardMarkup
@@ -11,76 +20,119 @@ class TimerService:
         buttons = []
         stats_button = [KeyboardButton("📊 Статистика")]
         
-        # Проверяем, есть ли активный таймер
-        active_timer_exists = any(timer["time_mark"] is not None for timer in self.time_tracker.values())
+        # Всегда синхронизируем с БД перед отображением
+        self._sync_memory_with_db()
+        
+        # 🔥 ИСПРАВЛЕНИЕ: Проверяем активный таймер по наличию активной сессии
+        active_timer_exists = bool(self.active_sessions)
         
         if active_timer_exists:
-            # Режим работы таймера - показываем только кнопку остановки активного
-            for name, data in self.time_tracker.items():
-                if data["time_mark"] is not None:
-                    buttons.append([KeyboardButton(f"⏹️ Стоп {name}")])
-                    break
+            # Показываем только кнопку остановки активного таймера
+            for timer_name in self.active_sessions.keys():
+                buttons.append([KeyboardButton(f"⏹️ Стоп {timer_name}")])
+                break  # Только один активный таймер
         else:
-            # Режим ожидания - показываем кнопки старта для всех таймеров
+            # Показываем кнопки старта для всех сегодняшних таймеров
             for name in self.time_tracker:
                 buttons.append([KeyboardButton(f"▶️ Старт {name}")])
         
         return ReplyKeyboardMarkup(buttons + [stats_button], resize_keyboard=True)
     
-    def create_timer(self, key):
-        if key not in self.time_tracker:
-            self.time_tracker[key] = {
-                "time_mark": None,
-                "full_time": 0
-            }
-            return f"Таймер '{key}' готов к запуску!"
-        else:
-            return f"Таймер '{key}' уже существует!"
-    
     def start_timer(self, timer_name):
-        if timer_name not in self.time_tracker:
-            return f"Таймер '{timer_name}' не найден"
+        """Запуск таймера с проверкой существования в БД"""
+        # Синхронизируем с БД перед операцией
+        self._sync_memory_with_db()
         
-        if self.time_tracker[timer_name]["time_mark"] is not None:
+        if timer_name not in self.time_tracker:
+            return f"Таймер '{timer_name}' не найден в базе данных"
+        
+        # 🔥 ИСПРАВЛЕНИЕ: Проверяем по активным сессиям
+        if timer_name in self.active_sessions:
             return f"Таймер '{timer_name}' уже запущен!"
         
         # Запуск таймера
-        self.time_tracker[timer_name]["time_mark"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.active_timer = timer_name
+        now = datetime.now()
+        start_time_str = now.strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Сохраняем сессию в БД
+        session_id = self.db.start_timer_session(timer_name, start_time_str)
+        self.active_sessions[timer_name] = session_id
+        
         return f"Таймер '{timer_name}' запущен!"
     
     def stop_timer(self, timer_name):
+        """Остановка таймера с сохранением в БД"""
+        # Синхронизируем с БД перед операцией
+        self._sync_memory_with_db()
+        
         if timer_name not in self.time_tracker:
             return f"Таймер '{timer_name}' не найден"
         
-        if self.time_tracker[timer_name]["time_mark"] is None:
+        # 🔥 ИСПРАВЛЕНИЕ: Проверяем по активным сессиям
+        if timer_name not in self.active_sessions:
             return f"Таймер '{timer_name}' не был запущен!"
         
-        # Остановка таймера
+        # Останавливаем таймер
         now = datetime.now()
-        last_time = datetime.strptime(self.time_tracker[timer_name]["time_mark"], "%Y-%m-%d %H:%M:%S")
-        delta = now - last_time
-        self.time_tracker[timer_name]["full_time"] += delta.total_seconds()
-        self.time_tracker[timer_name]["time_mark"] = None
-        self.active_timer = None
+        session_id = self.active_sessions[timer_name]
         
-        total_seconds = self.time_tracker[timer_name]["full_time"]
+        # Получаем время начала сессии из БД
+        start_time = self.db.get_session_start_time(session_id)
+        if not start_time:
+            return f"Ошибка: не найдено время начала сессии для таймера '{timer_name}'"
+        
+        last_time = datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S")
+        delta = now - last_time
+        duration_seconds = delta.total_seconds()
+        
+        # Обновляем общее время в БД
+        self.db.add_time_to_timer(timer_name, duration_seconds)
+        
+        # Завершаем сессию в БД
+        end_time_str = now.strftime("%Y-%m-%d %H:%M:%S")
+        self.db.stop_timer_session(session_id, end_time_str, duration_seconds)
+        del self.active_sessions[timer_name]
+        
+        # Получаем актуальные данные из БД для отчета
+        timer_data = self.db.get_timer(timer_name)
+        total_seconds = timer_data['total_seconds'] if timer_data else 0
         hours = int(total_seconds // 3600)
         minutes = int((total_seconds % 3600) // 60)
         
         return (
             f"Таймер '{timer_name}' остановлен\n"
+            f"Сессия: {duration_seconds/60:.1f} минут\n"
             f"Всего времени: {hours}h {minutes}m"
         )
     
+    def create_timer(self, key):
+        """Создание таймера через БД"""
+        success = self.db.create_timer(key)
+        if success:
+            # Синхронизируем с БД после создания
+            self._sync_memory_with_db()
+            return f"Таймер '{key}' готов к запуску!"
+        else:
+            return f"Таймер '{key}' уже существует!"
+    
     def add_minutes(self, timer_name, minutes):
+        """Добавление времени через БД"""
+        # Синхронизируем перед операцией
+        self._sync_memory_with_db()
+        
         if timer_name not in self.time_tracker:
             return f"Таймер '{timer_name}' не найден"
         
-        # Прибавляем минуты (переводим в секунды)
-        self.time_tracker[timer_name]["full_time"] += minutes * 60
+        # Добавляем время через БД
+        seconds_to_add = minutes * 60
+        self.db.add_time_to_timer(timer_name, seconds_to_add)
         
-        total_seconds = self.time_tracker[timer_name]["full_time"]
+        # Синхронизируем после изменения
+        self._sync_memory_with_db()
+        
+        # Получаем актуальные данные для отчета
+        timer_data = self.db.get_timer(timer_name)
+        total_seconds = timer_data['total_seconds'] if timer_data else 0
         hours = int(total_seconds // 3600)
         minutes = int((total_seconds % 3600) // 60)
         
@@ -89,19 +141,83 @@ class TimerService:
             f"Всего времени: {hours}h {minutes}m"
         )
     
+    def delete_timer(self, timer_name):
+        """Удаление таймера из БД"""
+        # Синхронизируем перед операцией
+        self._sync_memory_with_db()
+        
+        if timer_name not in self.time_tracker:
+            return f"Таймер '{timer_name}' не найден"
+        
+        # Если таймер активен, останавливаем его
+        if timer_name in self.active_sessions:
+            self.stop_timer(timer_name)
+        
+        # Удаляем из БД
+        self.db.delete_timer(timer_name)
+        
+        # Синхронизируем после удаления
+        self._sync_memory_with_db()
+        
+        return f"Таймер '{timer_name}' удален!"
+    
     def get_statistics(self):
+        """Получение статистики по сегодняшним таймерам"""
+        self._sync_memory_with_db()
+        
         if not self.time_tracker:
-            return "Нет активных таймеров"
+            return "На сегодня нет активных таймеров"
         
         stats = []
         for key, data in self.time_tracker.items():
-            total_hours = data["full_time"] / 3600
+            # Получаем актуальные данные из БД
+            timer_data = self.db.get_timer(key)
+            if timer_data:
+                total_seconds = timer_data['total_seconds']
+            else:
+                total_seconds = 0
+            
+            total_hours = total_seconds / 3600
             hours = int(total_hours)
             minutes = int((total_hours - hours) * 60)
-            status = "⏳" if data["time_mark"] else "⏹"
+            
+            # 🔥 ИСПРАВЛЕНИЕ: Статус по активным сессиям
+            status = "⏳" if key in self.active_sessions else "⏹"
             stats.append(f"{status} [{key}] {total_hours:.2f}h ({hours}h {minutes}m)")
         
-        return "Статистика:\n" + "\n".join(stats)
+        return "📊 Статистика на сегодня:\n" + "\n".join(stats)
+    
+    def clear_all_timers(self):
+        """Очистка всех таймеров (для команды старт)"""
+        # Останавливаем все активные таймеры
+        for timer_name in list(self.active_sessions.keys()):
+            self.stop_timer(timer_name)
+        
+        return "Все таймеры остановлены и кнопки очищены"
     
     def has_active_timer(self):
-        return any(timer["time_mark"] is not None for timer in self.time_tracker.values())
+        """Проверка активных таймеров через БД"""
+        self._sync_memory_with_db()
+        return bool(self.active_sessions)
+    
+    def get_detailed_statistics(self, timer_name):
+        """Подробная статистика по конкретному таймеру"""
+        if timer_name not in self.time_tracker:
+            return f"Таймер '{timer_name}' не найден"
+        
+        timer_data = self.db.get_timer(timer_name)
+        if not timer_data:
+            return f"Данные таймера '{timer_name}' не найдены"
+        
+        total_seconds = timer_data['total_seconds']
+        total_hours = total_seconds / 3600
+        hours = int(total_hours)
+        minutes = int((total_hours - hours) * 60)
+        
+        status = "⏳ Запущен" if timer_name in self.active_sessions else "⏹ Остановлен"
+        
+        return (
+            f"📊 Детальная статистика '{timer_name}':\n"
+            f"Всего времени: {total_hours:.2f}h ({hours}h {minutes}m)\n"
+            f"Статус: {status}"
+        )

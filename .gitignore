@@ -1,3 +1,4 @@
 .env
 oldBot.py
 *.pyc
+timers.db

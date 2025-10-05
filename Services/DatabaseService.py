@@ -14,63 +14,66 @@ class DatabaseService:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS timers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT UNIQUE NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    name TEXT NOT NULL,
                     total_seconds REAL DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id, name)
                 )
             ''')
             
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS timer_sessions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
                     timer_name TEXT NOT NULL,
                     start_time TIMESTAMP NOT NULL,
                     end_time TIMESTAMP,
                     duration_seconds REAL,
-                    FOREIGN KEY (timer_name) REFERENCES timers (name)
+                    FOREIGN KEY (user_id, timer_name) REFERENCES timers (user_id, name)
                 )
             ''')
             conn.commit()
     
-    def create_timer(self, name):
-        """Создание нового таймера"""
+    def create_timer(self, user_id, name):
+        """Создание нового таймера для пользователя"""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             try:
                 cursor.execute(
-                    'INSERT INTO timers (name) VALUES (?)',
-                    (name,)
+                    'INSERT INTO timers (user_id, name) VALUES (?, ?)',
+                    (user_id, name)
                 )
                 conn.commit()
                 return True
             except sqlite3.IntegrityError:
-                # Таймер уже существует
+                # Таймер уже существует у этого пользователя
                 return False
     
-    def get_today_timers(self):
-        """Получение таймеров, созданных сегодня"""
+    def get_today_timers(self, user_id):
+        """Получение таймеров пользователя, созданных сегодня"""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 SELECT name, total_seconds 
                 FROM timers 
-                WHERE DATE(created_at) = DATE('now')
-            ''')
+                WHERE user_id = ? AND DATE(created_at) = DATE('now')
+            ''', (user_id,))
             timers = {}
             for row in cursor.fetchall():
                 timers[row[0]] = {
-                    'total_seconds': row[1],
+                    'total_seconds': row[1]
                 }
             return timers
 
-    def get_timer(self, name):
-        """Получение данных таймера"""
+    def get_timer(self, user_id, name):
+        """Получение данных таймера пользователя"""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                'SELECT name, total_seconds FROM timers WHERE name = ?',
-                (name,)
+                'SELECT name, total_seconds FROM timers WHERE user_id = ? AND name = ?',
+                (user_id, name)
             )
             result = cursor.fetchone()
             if result:
@@ -79,24 +82,24 @@ class DatabaseService:
                     'total_seconds': result[1]
                 }
             return None
-
-    def add_time_to_timer(self, name, seconds_to_add):
-        """Добавление времени к таймеру"""
+    
+    def add_time_to_timer(self, user_id, name, seconds_to_add):
+        """Добавление времени к таймеру пользователя"""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                'UPDATE timers SET total_seconds = total_seconds + ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?',
-                (seconds_to_add, name)
+                'UPDATE timers SET total_seconds = total_seconds + ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND name = ?',
+                (seconds_to_add, user_id, name)
             )
             conn.commit()
     
-    def start_timer_session(self, timer_name, start_time):
-        """Начало сессии таймера"""
+    def start_timer_session(self, user_id, timer_name, start_time):
+        """Начало сессии таймера пользователя"""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                'INSERT INTO timer_sessions (timer_name, start_time) VALUES (?, ?)',
-                (timer_name, start_time)
+                'INSERT INTO timer_sessions (user_id, timer_name, start_time) VALUES (?, ?, ?)',
+                (user_id, timer_name, start_time)
             )
             conn.commit()
             return cursor.lastrowid
@@ -111,25 +114,25 @@ class DatabaseService:
             )
             conn.commit()
     
-    def delete_timer(self, name):
-        """Удаление таймера"""
+    def delete_timer(self, user_id, name):
+        """Удаление таймера пользователя"""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             # Сначала удаляем связанные сессии
-            cursor.execute('DELETE FROM timer_sessions WHERE timer_name = ?', (name,))
+            cursor.execute('DELETE FROM timer_sessions WHERE user_id = ? AND timer_name = ?', (user_id, name))
             # Затем удаляем таймер
-            cursor.execute('DELETE FROM timers WHERE name = ?', (name,))
+            cursor.execute('DELETE FROM timers WHERE user_id = ? AND name = ?', (user_id, name))
             conn.commit()
     
-    def get_active_sessions(self):
-        """Получение всех активных сессий (с пустым end_time)"""
+    def get_active_sessions(self, user_id):
+        """Получение всех активных сессий пользователя (с пустым end_time)"""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 SELECT id, timer_name 
                 FROM timer_sessions 
-                WHERE end_time IS NULL
-            ''')
+                WHERE user_id = ? AND end_time IS NULL
+            ''', (user_id,))
             active_sessions = {}
             for row in cursor.fetchall():
                 active_sessions[row[1]] = row[0]  # timer_name -> session_id

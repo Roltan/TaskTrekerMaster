@@ -10,38 +10,40 @@ load_dotenv()
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 timer_service = TimerService()
 
+def get_user_id(update: Update):
+    """Получение ID пользователя"""
+    return update.effective_user.id
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # База данных автоматически создается при инициализации DatabaseService
-    # Очищаем все активные таймеры и кнопки
-    clear_result = timer_service.clear_all_timers()
-    
-    # Получаем количество сегодняшних таймеров
-    today_timers_count = len(timer_service.time_tracker)
+    user_id = get_user_id(update)
+    # Очищаем все активные таймеры пользователя и кнопки
+    clear_result = timer_service.clear_all_timers(user_id)
     
     await update.message.reply_text(
-        f"{clear_result}\n"
-        f"📅 Загружено таймеров на сегодня: {today_timers_count}\n\n"
+        f"{clear_result}\n\n"
         "Используйте команды:\n"
         "/new название - создать таймер\n"
         "/plus название минуты - добавить время\n" 
         "/stats название - детальная статистика\n"
         "/delete название - удалить таймер",
-        reply_markup=timer_service.get_reply_keyboard()
+        reply_markup=timer_service.get_reply_keyboard(user_id)
     )
 
 async def new_timer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = get_user_id(update)
     if not context.args:
         await update.message.reply_text("Укажите название: /new название")
         return
     
     key = ' '.join(context.args)
-    result = timer_service.create_timer(key)
+    result = timer_service.create_timer(user_id, key)
     await update.message.reply_text(
         result,
-        reply_markup=timer_service.get_reply_keyboard()
+        reply_markup=timer_service.get_reply_keyboard(user_id)
     )
 
 async def plus_minutes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = get_user_id(update)
     if len(context.args) < 2:
         await update.message.reply_text("Используйте: /plus <название> <минуты>")
         return
@@ -53,62 +55,73 @@ async def plus_minutes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Минуты должны быть числом")
         return
     
-    result = timer_service.add_minutes(timer_name, minutes)
+    result = timer_service.add_minutes(user_id, timer_name, minutes)
     await update.message.reply_text(
         result,
-        reply_markup=timer_service.get_reply_keyboard()
+        reply_markup=timer_service.get_reply_keyboard(user_id)
     )
 
 async def detailed_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = get_user_id(update)
     if not context.args:
         await update.message.reply_text("Укажите название: /stats название")
         return
     
     timer_name = ' '.join(context.args)
-    result = timer_service.get_detailed_statistics(timer_name)
+    result = timer_service.get_detailed_statistics(user_id, timer_name)
     await update.message.reply_text(result)
 
 async def delete_timer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = get_user_id(update)
     if not context.args:
         await update.message.reply_text("Укажите название: /delete название")
         return
     
     timer_name = ' '.join(context.args)
-    result = timer_service.delete_timer(timer_name)
+    result = timer_service.delete_timer(user_id, timer_name)
     await update.message.reply_text(
         result,
-        reply_markup=timer_service.get_reply_keyboard()
+        reply_markup=timer_service.get_reply_keyboard(user_id)
     )
 
 async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = get_user_id(update)
     user_message = update.message.text
 
     # Обработка статистики
     if user_message == "📊 Статистика":
-        stats = timer_service.get_statistics()
+        stats = timer_service.get_statistics(user_id)
         await update.message.reply_text(
             stats,
-            reply_markup=timer_service.get_reply_keyboard()
+            reply_markup=timer_service.get_reply_keyboard(user_id)
         )
         return
     
-    # Обработка кнопок таймеров
-    for timer_name in timer_service.time_tracker:
-        if user_message == f"▶️ Старт {timer_name}":
-            result = timer_service.start_timer(timer_name)
-            await update.message.reply_text(
-                result,
-                reply_markup=timer_service.get_reply_keyboard()
-            )
-            return
-            
-        elif user_message == f"⏹️ Стоп {timer_name}":
-            result = timer_service.stop_timer(timer_name)
-            await update.message.reply_text(
-                result,
-                reply_markup=timer_service.get_reply_keyboard()
-            )
-            return
+    # Обработка кнопок старта таймеров
+    if user_message.startswith("▶️ Старт "):
+        timer_name = user_message.replace("▶️ Старт ", "").strip()
+        result = timer_service.start_timer(user_id, timer_name)
+        await update.message.reply_text(
+            result,
+            reply_markup=timer_service.get_reply_keyboard(user_id)
+        )
+        return
+    
+    # Обработка кнопок остановки таймеров  
+    if user_message.startswith("⏹️ Стоп "):
+        timer_name = user_message.replace("⏹️ Стоп ", "").strip()
+        result = timer_service.stop_timer(user_id, timer_name)
+        await update.message.reply_text(
+            result,
+            reply_markup=timer_service.get_reply_keyboard(user_id)
+        )
+        return
+    
+    # Если сообщение не распознано
+    await update.message.reply_text(
+        "Команда не распознана",
+        reply_markup=timer_service.get_reply_keyboard(user_id)
+    )
 
 def main():
     if not TOKEN:

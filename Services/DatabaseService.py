@@ -61,7 +61,6 @@ class DatabaseService:
             for row in cursor.fetchall():
                 timers[row[0]] = {
                     'total_seconds': row[1],
-                    'time_mark': None
                 }
             return timers
 
@@ -80,41 +79,6 @@ class DatabaseService:
                     'total_seconds': result[1]
                 }
             return None
-    
-    def get_all_timers(self):
-        """Получение всех таймеров"""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT name, total_seconds FROM timers')
-            timers = {}
-            for row in cursor.fetchall():
-                timers[row[0]] = {
-                    'total_seconds': row[1],
-                    'time_mark': None  # Это будет храниться в памяти
-                }
-            return timers
-    
-    def update_timer_total(self, name, total_seconds):
-        """Обновление общего времени таймера"""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                'UPDATE timers SET total_seconds = ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?',
-                (total_seconds, name)
-            )
-            conn.commit()
-    
-    def update_timer_status(self, name, time_mark):
-        """Обновление статуса таймера (time_mark) в БД"""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            # Здесь мы можем хранить time_mark в отдельном поле или использовать временное решение
-            # Временное решение: обновляем updated_at как индикатор активности
-            cursor.execute(
-                'UPDATE timers SET updated_at = ? WHERE name = ?',
-                (time_mark if time_mark else datetime.now().strftime("%Y-%m-%d %H:%M:%S"), name)
-            )
-            conn.commit()
 
     def add_time_to_timer(self, name, seconds_to_add):
         """Добавление времени к таймеру"""
@@ -156,36 +120,6 @@ class DatabaseService:
             # Затем удаляем таймер
             cursor.execute('DELETE FROM timers WHERE name = ?', (name,))
             conn.commit()
-    
-    def get_timer_statistics(self, name):
-        """Получение статистики по таймеру"""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            
-            # Получаем общее время
-            cursor.execute('SELECT total_seconds FROM timers WHERE name = ?', (name,))
-            total_result = cursor.fetchone()
-            total_seconds = total_result[0] if total_result else 0
-            
-            # Получаем количество сессий
-            cursor.execute('SELECT COUNT(*) FROM timer_sessions WHERE timer_name = ?', (name,))
-            sessions_count = cursor.fetchone()[0]
-            
-            # Получаем последние сессии
-            cursor.execute('''
-                SELECT start_time, end_time, duration_seconds 
-                FROM timer_sessions 
-                WHERE timer_name = ? 
-                ORDER BY start_time DESC 
-                LIMIT 5
-            ''', (name,))
-            recent_sessions = cursor.fetchall()
-            
-            return {
-                'total_seconds': total_seconds,
-                'sessions_count': sessions_count,
-                'recent_sessions': recent_sessions
-            }
     
     def get_active_sessions(self):
         """Получение всех активных сессий (с пустым end_time)"""

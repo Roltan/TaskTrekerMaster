@@ -5,7 +5,6 @@ class TimerService:
     def __init__(self):
         self.db = DatabaseService()
         self._sync_memory_with_db()
-        self.active_timer = None
         self.active_sessions = {}
     
     def _sync_memory_with_db(self):
@@ -110,7 +109,6 @@ class TimerService:
         success = self.db.create_timer(key)
         if success:
             # Синхронизируем с БД после создания
-            self._sync_memory_with_db()
             return f"Таймер '{key}' готов к запуску!"
         else:
             return f"Таймер '{key}' уже существует!"
@@ -194,11 +192,6 @@ class TimerService:
             self.stop_timer(timer_name)
         
         return "Все таймеры остановлены и кнопки очищены"
-    
-    def has_active_timer(self):
-        """Проверка активных таймеров через БД"""
-        self._sync_memory_with_db()
-        return bool(self.active_sessions)
     
     def get_detailed_statistics(self, timer_name):
         """Подробная статистика по конкретному таймеру"""

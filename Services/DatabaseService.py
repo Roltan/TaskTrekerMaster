@@ -11,6 +11,7 @@ class DatabaseService:
         """Инициализация базы данных и создание таблиц"""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
+
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS timers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,

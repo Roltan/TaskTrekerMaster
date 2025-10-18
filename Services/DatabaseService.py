@@ -93,14 +93,16 @@ class DatabaseService:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                'SELECT name, total_seconds FROM timers WHERE user_id = ? AND name = ?',
+                'SELECT name, total_seconds, task_id, comment FROM timers WHERE user_id = ? AND name = ?',
                 (user_id, name)
             )
             result = cursor.fetchone()
             if result:
                 return {
                     'name': result[0],
-                    'total_seconds': result[1]
+                    'total_seconds': result[1],
+                    'task_id': result[2],
+                    'comment': result[3]
                 }
             return None
     
@@ -179,5 +181,58 @@ class DatabaseService:
                 return {
                     'user_id': result[0],
                     'b24_id': result[1]
+                }
+            return None
+
+    # ДОБАВЛЕННЫЕ МЕТОДЫ ДЛЯ ОБНОВЛЕНИЯ ТАЙМЕРОВ
+
+    def update_timer_task_id(self, user_id, timer_name, task_id):
+        """Обновление task_id для таймера"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'UPDATE timers SET task_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND name = ?',
+                (task_id, user_id, timer_name)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def update_timer_comment(self, user_id, timer_name, comment):
+        """Обновление комментария для таймера"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'UPDATE timers SET comment = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND name = ?',
+                (comment, user_id, timer_name)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def update_timer_task_id_and_comment(self, user_id, timer_name, task_id, comment):
+        """Обновление одновременно task_id и комментария для таймера"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'UPDATE timers SET task_id = ?, comment = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND name = ?',
+                (task_id, comment, user_id, timer_name)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def get_timer_by_name(self, user_id, timer_name):
+        """Получение таймера по имени пользователя и названию таймера"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT name, total_seconds, task_id, comment FROM timers WHERE user_id = ? AND name = ?',
+                (user_id, timer_name)
+            )
+            result = cursor.fetchone()
+            if result:
+                return {
+                    'name': result[0],
+                    'total_seconds': result[1],
+                    'task_id': result[2],
+                    'comment': result[3]
                 }
             return None

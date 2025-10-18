@@ -214,33 +214,6 @@ class TimerService:
         ]
         
         return "\n".join(result)
-    
-    def tracker_all_timer(self, user_id):
-        self._sync_memory_with_db(user_id)
-        state = self.db.get_today_timers(user_id)
-        user_b24_id = self.db.getUser(user_id)['b24_id']
-        print(state)
-
-        if not state:
-            return "На сегодня нет активных таймеров"
-    
-        if not user_b24_id:
-            return "У вас нет доступа в Битрикс wptt"
-        
-        error = [
-            "Таймеров не затрекано:"
-        ]
-
-        for timer in state.values():
-            if (timer['task_id'] == 0):
-                error.append(timer['name'])
-                continue
-            self.b24.addTime(timer['task_id'], user_b24_id, timer['total_seconds'], timer['comment'])
-
-        if (len(error) > 1):
-            return "\n".join(error)
-        else:
-            return "Все таймеры затреканы"
 
     def clear_all_timers(self, user_id):
         """Очистка всех таймеров пользователя (для команды старт)"""

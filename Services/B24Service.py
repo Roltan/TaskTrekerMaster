@@ -45,5 +45,5 @@ class B24Service:
                 }
             }
         )
-        print(response)
+        return response.status_code == 200
         

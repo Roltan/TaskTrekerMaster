@@ -55,9 +55,10 @@ class DatabaseService:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             try:
-                if (type == 2): comment = 'кч'
-                if (type == 1): comment = 'нкч'
-                if (type == 0): comment = 'баги'
+                if (type == 3): comment = 'кч'
+                if (type == 2): comment = 'нкч'
+                if (type == 1): comment = 'баги'
+                if (type == 0): comment = ''
 
                 cursor.execute(
                     'INSERT INTO timers (user_id, name, task_id, comment) VALUES (?, ?, ?, ?)',

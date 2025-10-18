@@ -2,3 +2,4 @@
 oldBot.py
 *.pyc
 timers.db
+/.vscode

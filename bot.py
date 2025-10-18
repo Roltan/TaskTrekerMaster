@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 from Services.TimerService import TimerService
+from Services.B24Service import B24Service
 
 # Загружаем переменные окружения
 load_dotenv()
@@ -18,6 +19,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = get_user_id(update)
     # Очищаем все активные таймеры пользователя и кнопки
     clear_result = timer_service.clear_all_timers(user_id)
+
+    # Обновляем токены Битрикса
+    B24Service.refreshTokens()
     
     await update.message.reply_text(
         f"{clear_result}\n\n"
@@ -131,6 +135,7 @@ def main():
     app = Application.builder().token(TOKEN).build()
     
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("test", ))
     app.add_handler(CommandHandler("new", new_timer))
     app.add_handler(CommandHandler("plus", plus_minutes))
     app.add_handler(CommandHandler("stats", detailed_stats))

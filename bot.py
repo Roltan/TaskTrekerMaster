@@ -21,7 +21,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_result = timer_service.clear_all_timers(user_id)
 
     # Обновляем токены Битрикса
-    B24Service.refreshTokens()
+    B24Service().refreshTokens()
     
     await update.message.reply_text(
         f"{clear_result}\n\n"
@@ -111,6 +111,15 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         stats = timer_service.get_statistics(user_id)
         await update.message.reply_text(
             stats,
+            reply_markup=timer_service.get_reply_keyboard(user_id)
+        )
+        return
+    
+    # Обработка отчёта
+    if user_message == "Отчёт":
+        result = timer_service.tracker_all_timer(user_id)
+        await update.message.reply_text(
+            result,
             reply_markup=timer_service.get_reply_keyboard(user_id)
         )
         return

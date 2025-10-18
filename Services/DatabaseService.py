@@ -74,14 +74,17 @@ class DatabaseService:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT name, total_seconds 
+                SELECT name, total_seconds, task_id, comment
                 FROM timers 
                 WHERE user_id = ? AND DATE(created_at) = DATE('now')
             ''', (user_id,))
             timers = {}
             for row in cursor.fetchall():
                 timers[row[0]] = {
-                    'total_seconds': row[1]
+                    'name': row[0],
+                    'total_seconds': row[1],
+                    'task_id': row[2],
+                    'comment': row[3]
                 }
             return timers
 
@@ -163,3 +166,18 @@ class DatabaseService:
             cursor.execute('SELECT start_time FROM timer_sessions WHERE id = ?', (session_id,))
             result = cursor.fetchone()
             return result[0] if result else None
+        
+    def getUser(self, user_id):
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT user_id, b24_id FROM users WHERE user_id = ?',
+                (user_id,)
+            )
+            result = cursor.fetchone()
+            if result:
+                return {
+                    'user_id': result[0],
+                    'b24_id': result[1]
+                }
+            return None

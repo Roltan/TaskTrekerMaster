@@ -1,9 +1,11 @@
 import requests
 import os
 from Services.EnvService import update_env_file
+import threading
 
 class B24Service:
-    def refreshTokens():
+    def refreshTokens(self):
+        threading.Timer(3500, self.refreshTokens).start()
         try:
             response = requests.get(
                 os.getenv('B24_BASE_URL') + 
@@ -30,7 +32,7 @@ class B24Service:
             print(f"❌ Ошибка при запросе: {e}")
             return 0
 
-    def addTime(taskId, userId, time, comment):
+    def addTime(self, taskId, userId, time, comment):
         response = requests.post(
             os.getenv('B24_BASE_URL') + '/rest/task.elapseditem.add',
             json={

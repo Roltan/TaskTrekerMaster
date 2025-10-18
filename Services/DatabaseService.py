@@ -13,14 +13,27 @@ class DatabaseService:
             cursor = conn.cursor()
 
             cursor.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    b24_id INTEGER NOT NULL,
+                    name TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id)
+                )
+            ''')
+
+            cursor.execute('''
                 CREATE TABLE IF NOT EXISTS timers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER NOT NULL,
                     name TEXT NOT NULL,
                     total_seconds REAL DEFAULT 0,
+                    task_id INTEGER,
+                    comment TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(user_id, name)
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
             
@@ -37,14 +50,19 @@ class DatabaseService:
             ''')
             conn.commit()
     
-    def create_timer(self, user_id, name):
+    def create_timer(self, user_id, name, task_id='', type=2):
         """Создание нового таймера для пользователя"""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             try:
+                if (type == 3): comment = 'кч'
+                if (type == 2): comment = 'нкч'
+                if (type == 1): comment = 'баги'
+                if (type == 0): comment = ''
+
                 cursor.execute(
-                    'INSERT INTO timers (user_id, name) VALUES (?, ?)',
-                    (user_id, name)
+                    'INSERT INTO timers (user_id, name, task_id, comment) VALUES (?, ?, ?, ?)',
+                    (user_id, name, task_id, comment)
                 )
                 conn.commit()
                 return True
@@ -57,14 +75,17 @@ class DatabaseService:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT name, total_seconds 
+                SELECT name, total_seconds, task_id, comment
                 FROM timers 
                 WHERE user_id = ? AND DATE(created_at) = DATE('now')
             ''', (user_id,))
             timers = {}
             for row in cursor.fetchall():
                 timers[row[0]] = {
-                    'total_seconds': row[1]
+                    'name': row[0],
+                    'total_seconds': row[1],
+                    'task_id': row[2],
+                    'comment': row[3]
                 }
             return timers
 
@@ -73,14 +94,16 @@ class DatabaseService:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                'SELECT name, total_seconds FROM timers WHERE user_id = ? AND name = ?',
+                'SELECT name, total_seconds, task_id, comment FROM timers WHERE user_id = ? AND name = ?',
                 (user_id, name)
             )
             result = cursor.fetchone()
             if result:
                 return {
                     'name': result[0],
-                    'total_seconds': result[1]
+                    'total_seconds': result[1],
+                    'task_id': result[2],
+                    'comment': result[3]
                 }
             return None
     
@@ -146,3 +169,71 @@ class DatabaseService:
             cursor.execute('SELECT start_time FROM timer_sessions WHERE id = ?', (session_id,))
             result = cursor.fetchone()
             return result[0] if result else None
+        
+    def getUser(self, user_id):
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT user_id, b24_id FROM users WHERE user_id = ?',
+                (user_id,)
+            )
+            result = cursor.fetchone()
+            if result:
+                return {
+                    'user_id': result[0],
+                    'b24_id': result[1]
+                }
+            return None
+
+    # ДОБАВЛЕННЫЕ МЕТОДЫ ДЛЯ ОБНОВЛЕНИЯ ТАЙМЕРОВ
+
+    def update_timer_task_id(self, user_id, timer_name, task_id):
+        """Обновление task_id для таймера"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'UPDATE timers SET task_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND name = ?',
+                (task_id, user_id, timer_name)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def update_timer_comment(self, user_id, timer_name, comment):
+        """Обновление комментария для таймера"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'UPDATE timers SET comment = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND name = ?',
+                (comment, user_id, timer_name)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def update_timer_task_id_and_comment(self, user_id, timer_name, task_id, comment):
+        """Обновление одновременно task_id и комментария для таймера"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'UPDATE timers SET task_id = ?, comment = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND name = ?',
+                (task_id, comment, user_id, timer_name)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def get_timer_by_name(self, user_id, timer_name):
+        """Получение таймера по имени пользователя и названию таймера"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT name, total_seconds, task_id, comment FROM timers WHERE user_id = ? AND name = ?',
+                (user_id, timer_name)
+            )
+            result = cursor.fetchone()
+            if result:
+                return {
+                    'name': result[0],
+                    'total_seconds': result[1],
+                    'task_id': result[2],
+                    'comment': result[3]
+                }
+            return None

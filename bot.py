@@ -3,12 +3,15 @@ from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 from Services.TimerService import TimerService
+from Services.B24Service import B24Service
+from Services.ReportService import ReportService
 
 # Загружаем переменные окружения
 load_dotenv()
 
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 timer_service = TimerService()
+report_service = ReportService()  # Создаем экземпляр здесь
 
 def get_user_id(update: Update):
     """Получение ID пользователя"""
@@ -18,6 +21,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = get_user_id(update)
     # Очищаем все активные таймеры пользователя и кнопки
     clear_result = timer_service.clear_all_timers(user_id)
+
+    # Обновляем токены Битрикса
+    B24Service().refreshTokens()
     
     await update.message.reply_text(
         f"{clear_result}\n\n"
@@ -31,12 +37,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def new_timer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = get_user_id(update)
-    if not context.args:
-        await update.message.reply_text("Укажите название: /new название")
+    if not context.args or len(context.args) < 3:
+        await update.message.reply_text("Укажите название, ID и тип: /new \"название с пробелами\" id type")
         return
     
-    key = ' '.join(context.args)
-    result = timer_service.create_timer(user_id, key)
+    try:
+        # Последние два аргумента - это ID и type
+        task_id = int(context.args[-2])
+        task_type = int(context.args[-1])
+        
+        # Всё что между "/new" и ID - это название
+        key = ' '.join(context.args[:-2])
+        
+    except ValueError:
+        await update.message.reply_text("ID и type должны быть числами")
+        return
+    except Exception as e:
+        await update.message.reply_text(f"Ошибка формата: {e}")
+        return
+    
+    result = timer_service.create_timer(user_id, key, task_id, task_type)
     await update.message.reply_text(
         result,
         reply_markup=timer_service.get_reply_keyboard(user_id)
@@ -84,10 +104,21 @@ async def delete_timer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=timer_service.get_reply_keyboard(user_id)
     )
 
-async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Универсальный обработчик для диалогов и кнопок"""
     user_id = get_user_id(update)
     user_message = update.message.text
 
+    # 1. Сначала проверяем, не находимся ли мы в диалоге с ReportService
+    if context.user_data.get('awaiting_task_id'):
+        await report_service.handle_task_id_response(update, context)
+        return
+        
+    if context.user_data.get('awaiting_comment'):
+        await report_service.handle_comment_response(update, context)
+        return
+
+    # 2. Если не в диалоге, обрабатываем кнопки и команды
     # Обработка статистики
     if user_message == "📊 Статистика":
         stats = timer_service.get_statistics(user_id)
@@ -95,6 +126,16 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             stats,
             reply_markup=timer_service.get_reply_keyboard(user_id)
         )
+        return
+    
+    # Обработка отчёта
+    if user_message == "Отчёт":
+        result = await report_service.tracker_all_timer(user_id, update, context)
+        if result != "DIALOG_STARTED":
+            await update.message.reply_text(
+                result,
+                reply_markup=timer_service.get_reply_keyboard(user_id)
+            )
         return
     
     # Обработка кнопок старта таймеров
@@ -130,12 +171,15 @@ def main():
     
     app = Application.builder().token(TOKEN).build()
     
+    # Обработчики команд
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("new", new_timer))
     app.add_handler(CommandHandler("plus", plus_minutes))
     app.add_handler(CommandHandler("stats", detailed_stats))
     app.add_handler(CommandHandler("delete", delete_timer))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_buttons))
+    
+    # Единый обработчик для всех сообщений (кнопок и диалогов)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_all_messages))
     
     print("Бот запущен...")
     app.run_polling()

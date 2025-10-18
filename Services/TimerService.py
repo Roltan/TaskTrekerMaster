@@ -1,9 +1,11 @@
 from datetime import datetime
 from Services.DatabaseService import DatabaseService
+from Services.B24Service import B24Service
 
 class TimerService:
     def __init__(self):
         self.db = DatabaseService()
+        self.b24 = B24Service()
         # Храним состояние для каждого пользователя
         self.user_states = {}  # {user_id: {'time_tracker': {}, 'active_sessions': {}}}
     
@@ -45,6 +47,7 @@ class TimerService:
             # Показываем кнопки старта для всех сегодняшних таймеров пользователя
             for name in state['time_tracker']:
                 buttons.append([KeyboardButton(f"▶️ Старт {name}")])
+            buttons.append([KeyboardButton(f"Отчёт")])
         
         return ReplyKeyboardMarkup(buttons + [stats_button], resize_keyboard=True)
     
@@ -116,9 +119,9 @@ class TimerService:
             f"Всего времени: {hours}h {minutes}m"
         )
     
-    def create_timer(self, user_id, key):
+    def create_timer(self, user_id, key, task_id, type):
         """Создание таймера через БД"""
-        success = self.db.create_timer(user_id, key)
+        success = self.db.create_timer(user_id, key, task_id, type)
         if success:
             return f"Таймер '{key}' готов к запуску!"
         else:
@@ -181,10 +184,13 @@ class TimerService:
             return "На сегодня нет активных таймеров"
         
         stats = []
+        total_day_seconds = 0
+
         for key in state['time_tracker']:
             # Получаем актуальные данные из БД
             timer_data = self.db.get_timer(user_id, key)
             total_seconds = timer_data['total_seconds'] if timer_data else 0
+            total_day_seconds += total_seconds
             
             total_hours = total_seconds / 3600
             hours = int(total_hours)
@@ -194,8 +200,21 @@ class TimerService:
             status = "⏳" if key in state['active_sessions'] else "⏹"
             stats.append(f"{status} [{key}] {total_hours:.2f}h ({hours}h {minutes}m)")
         
-        return "📊 Статистика на сегодня:\n" + "\n".join(stats)
-    
+        # Подсчёт общего времени за день
+        total_day_hours = total_day_seconds / 3600
+        total_day_hours_int = int(total_day_hours)
+        total_day_minutes = int((total_day_hours - total_day_hours_int) * 60)
+        
+        # Формируем итоговую статистику
+        result = [
+            "📊 Статистика на сегодня:",
+            *stats,
+            "",
+            f"📈 **Всего за день: {total_day_hours:.2f}h ({total_day_hours_int}h {total_day_minutes}m)**"
+        ]
+        
+        return "\n".join(result)
+
     def clear_all_timers(self, user_id):
         """Очистка всех таймеров пользователя (для команды старт)"""
         # Останавливаем все активные таймеры

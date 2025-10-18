@@ -35,12 +35,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def new_timer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = get_user_id(update)
-    if not context.args:
-        await update.message.reply_text("Укажите название: /new название")
+    if not context.args or len(context.args) < 3:
+        await update.message.reply_text("Укажите название, ID и тип: /new \"название с пробелами\" id type")
         return
     
-    key = ' '.join(context.args)
-    result = timer_service.create_timer(user_id, key)
+    try:
+        # Последние два аргумента - это ID и type
+        task_id = int(context.args[-2])
+        task_type = int(context.args[-1])
+        
+        # Всё что между "/new" и ID - это название
+        key = ' '.join(context.args[:-2])
+        
+    except ValueError:
+        await update.message.reply_text("ID и type должны быть числами")
+        return
+    except Exception as e:
+        await update.message.reply_text(f"Ошибка формата: {e}")
+        return
+    
+    result = timer_service.create_timer(user_id, key, task_id, task_type)
     await update.message.reply_text(
         result,
         reply_markup=timer_service.get_reply_keyboard(user_id)
@@ -135,7 +149,6 @@ def main():
     app = Application.builder().token(TOKEN).build()
     
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("test", ))
     app.add_handler(CommandHandler("new", new_timer))
     app.add_handler(CommandHandler("plus", plus_minutes))
     app.add_handler(CommandHandler("stats", detailed_stats))

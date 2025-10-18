@@ -13,14 +13,27 @@ class DatabaseService:
             cursor = conn.cursor()
 
             cursor.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    b24_id INTEGER NOT NULL,
+                    name TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id)
+                )
+            ''')
+
+            cursor.execute('''
                 CREATE TABLE IF NOT EXISTS timers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER NOT NULL,
                     name TEXT NOT NULL,
                     total_seconds REAL DEFAULT 0,
+                    task_id INTEGER,
+                    comment TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(user_id, name)
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
             
@@ -37,14 +50,18 @@ class DatabaseService:
             ''')
             conn.commit()
     
-    def create_timer(self, user_id, name):
+    def create_timer(self, user_id, name, task_id='', type=2):
         """Создание нового таймера для пользователя"""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             try:
+                if (type == 2): comment = 'кч'
+                if (type == 1): comment = 'нкч'
+                if (type == 0): comment = 'баги'
+
                 cursor.execute(
-                    'INSERT INTO timers (user_id, name) VALUES (?, ?)',
-                    (user_id, name)
+                    'INSERT INTO timers (user_id, name, task_id, comment) VALUES (?, ?, ?, ?)',
+                    (user_id, name, task_id, comment)
                 )
                 conn.commit()
                 return True

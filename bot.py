@@ -21,9 +21,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = get_user_id(update)
     # Очищаем все активные таймеры пользователя и кнопки
     clear_result = timer_service.clear_all_timers(user_id)
-
-    # Обновляем токены Битрикса
-    B24Service().refreshTokens()
     
     await update.message.reply_text(
         f"{clear_result}\n\n"
@@ -183,6 +180,9 @@ def main():
     
     print("Бот запущен...")
     app.run_polling()
+
+    # Обновляем токены Битрикса
+    B24Service().refreshTokens()
 
 if __name__ == "__main__":
     main()

@@ -46,23 +46,34 @@ class ReportService:
         timer = pending_timers[current_index]
         context.user_data['current_timer'] = timer
         
-        if not timer.get('task_id'):
+        # Получаем актуальные данные из БД
+        current_timer = self.timer_model.get_timer(update.effective_user.id, timer['name'])
+        
+        # Проверяем, что таймер найден
+        if not current_timer:
+            await update.message.reply_text(f"❌ Таймер \"{timer['name']}\" не найден в базе данных. Пропускаем.")
+            # Переходим к следующему таймеру
+            context.user_data['current_timer_index'] += 1
+            await self._process_next_timer(update, context)
+            return
+        
+        if not current_timer.get('task_id'):
             # Запрашиваем ID задачи
             await update.message.reply_text(
                 f"❓ У таймера \"{timer['name']}\" не указан ID задачи.\n"
                 f"Пожалуйста, введите ID задачи:"
             )
             context.user_data['awaiting_task_id'] = True
-        elif not timer.get('comment'):
+        elif not current_timer.get('comment'):
             # Запрашиваем комментарий
             await update.message.reply_text(
-                f"❓ У таймера \"{timer['name']}\" (ID: {timer['task_id']}) нет комментария.\n"
+                f"❓ У таймера \"{timer['name']}\" (ID: {current_timer['task_id']}) нет комментария.\n"
                 f"Пожалуйста, введите комментарий:"
             )
             context.user_data['awaiting_comment'] = True
         else:
             # Все данные есть, отправляем в Битрикс
-            await self._send_to_bitrix(update, context, timer)
+            await self._send_to_bitrix(update, context, current_timer)
 
     async def _send_to_bitrix(self, update: Update, context: ContextTypes.DEFAULT_TYPE, timer=None):
         """Отправляет таймер в Битрикс"""
@@ -133,15 +144,13 @@ class ReportService:
     async def handle_task_id_response(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает ответ с ID задачи"""
         user_id = update.effective_user.id
+        
+        # Сбрасываем флаг сразу
+        context.user_data.pop('awaiting_task_id', None)
+        
         try:
             task_id = int(update.message.text)
             timer_name = context.user_data['current_timer']['name']
-            
-            # Получаем актуальные данные таймера
-            timer = self.timer_model.get_timer(user_id, timer_name)
-            if not timer:
-                await update.message.reply_text("❌ Ошибка: таймер не найден в базе данных")
-                return
             
             # Обновляем task_id в базе данных
             success = self.timer_model.update(
@@ -155,24 +164,34 @@ class ReportService:
                 # Обновляем текущий таймер в контексте
                 context.user_data['current_timer']['task_id'] = task_id
                 
-                # Проверяем комментарий
-                if not timer.get('comment'):
+                # Проверяем, нужен ли еще комментарий
+                current_timer = self.timer_model.get_timer(user_id, timer_name)  # Используем user_id
+                if current_timer and not current_timer.get('comment'):
                     await update.message.reply_text(
                         f"❓ Теперь введите комментарий для таймера \"{timer_name}\":"
                     )
                     context.user_data['awaiting_comment'] = True
                 else:
-                    # Отправляем в Битрикс
-                    await self._send_to_bitrix(update, context, context.user_data['current_timer'])
+                    # Все данные есть, отправляем в Битрикс
+                    await self._send_to_bitrix(update, context)
             else:
                 await update.message.reply_text("❌ Ошибка при обновлении ID задачи")
+                # Продолжаем со следующим таймером
+                context.user_data['current_timer_index'] += 1
+                await self._process_next_timer(update, context)
                 
         except ValueError:
             await update.message.reply_text("❌ ID задачи должен быть числом. Попробуйте еще раз:")
+            # Возвращаем флаг ожидания
+            context.user_data['awaiting_task_id'] = True
 
     async def handle_comment_response(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает ответ с комментарием"""
         user_id = update.effective_user.id
+        
+        # Сбрасываем флаг сразу
+        context.user_data.pop('awaiting_comment', None)
+        
         comment = update.message.text
         timer_name = context.user_data['current_timer']['name']
         
@@ -188,7 +207,10 @@ class ReportService:
             # Обновляем текущий таймер в контексте
             context.user_data['current_timer']['comment'] = comment
             
-            # Отправляем в Битрикс
-            await self._send_to_bitrix(update, context, context.user_data['current_timer'])
+            # Все данные теперь есть, отправляем в Битрикс
+            await self._send_to_bitrix(update, context)
         else:
             await update.message.reply_text("❌ Ошибка при сохранении комментария")
+            # Продолжаем со следующим таймером
+            context.user_data['current_timer_index'] += 1
+            await self._process_next_timer(update, context)

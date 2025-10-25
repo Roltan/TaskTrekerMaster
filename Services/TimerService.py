@@ -209,25 +209,3 @@ class TimerService:
             self.stop_timer(user_id, session['timer_name'])
         
         return "Все таймеры остановлены и кнопки очищены"
-    
-    def get_detailed_statistics(self, user_id, timer_name):
-        """Подробная статистика по конкретному таймеру пользователя"""
-        timer = self.timer_model.get_timer(user_id, timer_name)
-        if not timer:
-            return f"Таймер '{timer_name}' не найден"
-        
-        total_seconds = timer['total_seconds']
-        total_hours = total_seconds / 3600
-        hours = int(total_hours)
-        minutes = int((total_hours - hours) * 60)
-        
-        # Проверяем активные сессии
-        active_sessions = self.session_model.get_active_sessions(user_id)
-        is_active = any(session['timer_name'] == timer_name for session in active_sessions)
-        status = "⏳ Запущен" if is_active else "⏹ Остановлен"
-        
-        return (
-            f"📊 Детальная статистика '{timer_name}':\n"
-            f"Всего времени: {total_hours:.2f}h ({hours}h {minutes}m)\n"
-            f"Статус: {status}"
-        )

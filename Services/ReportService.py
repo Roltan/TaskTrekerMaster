@@ -76,28 +76,60 @@ class ReportService:
             await self._send_to_bitrix(update, context, current_timer)
 
     async def _send_to_bitrix(self, update: Update, context: ContextTypes.DEFAULT_TYPE, timer=None):
-        """Отправляет таймер в Битрикс"""
+        """Отправляет или обновляет таймер в Битрикс"""
         if timer is None:
             timer = context.user_data['current_timer']
         
         user_b24_id = context.user_data['user_b24_id']
         
+        if 'tracked_timers' not in context.user_data:
+            context.user_data['tracked_timers'] = []
+        if 'updated_timers' not in context.user_data:
+            context.user_data['updated_timers'] = []
+        if 'error_timers' not in context.user_data:
+            context.user_data['error_timers'] = []
+
         try:
-            success = self.b24.addTime(
-                timer['task_id'], 
-                user_b24_id, 
-                timer['total_seconds'], 
-                timer.get('comment', '')
-            )
-            if success:
-                context.user_data['tracked_timers'].append(timer['name'])
-                await update.message.reply_text(f"✅ Таймер \"{timer['name']}\" успешно отправлен в Битрикс")
+            if not timer.get('report_id'):
+                # Создаем новый отчёт
+                report_id = self.b24.addTime(
+                    timer['task_id'], 
+                    user_b24_id, 
+                    timer['total_seconds'], 
+                    timer.get('comment', '')
+                )
+                
+                if report_id:
+                    # Сохраняем report_id в БД
+                    self.timer_model.update(
+                        {"report_id": report_id},
+                        {"user_id": update.effective_user.id, "name": timer['name']}
+                    )
+                    context.user_data['tracked_timers'].append(timer['name'])
+                    await update.message.reply_text(f"✅ Таймер \"{timer['name']}\" успешно отправлен в Битрикс (ID: {report_id})")
+                else:
+                    context.user_data['error_timers'].append(timer['name'])
+                    await update.message.reply_text(f"❌ Ошибка отправки таймера \"{timer['name']}\"")
+                    
             else:
-                context.user_data['error_timers'].append(timer['name'])
-                await update.message.reply_text(f"❌ Ошибка отправки таймера \"{timer['name']}\"")
+                # Обновляем существующий отчёт
+                success = self.b24.updateTime(
+                    timer['task_id'],
+                    timer['report_id'],
+                    timer['total_seconds'],
+                    timer.get('comment', '')
+                )
+                
+                if success:
+                    context.user_data['updated_timers'].append(timer['name'])
+                    await update.message.reply_text(f"✅ Таймер \"{timer['name']}\" успешно обновлен в Битрикс")
+                else:
+                    context.user_data['error_timers'].append(timer['name'])
+                    await update.message.reply_text(f"❌ Ошибка обновления таймера \"{timer['name']}\"")
+                    
         except Exception as e:
             context.user_data['error_timers'].append(timer['name'])
-            await update.message.reply_text(f"❌ Ошибка отправки таймера \"{timer['name']}\": {str(e)}")
+            await update.message.reply_text(f"❌ Ошибка обработки таймера \"{timer['name']}\": {str(e)}")
         
         # Переходим к следующему таймеру
         context.user_data['current_timer_index'] += 1

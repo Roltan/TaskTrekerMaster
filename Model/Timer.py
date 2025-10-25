@@ -11,6 +11,7 @@ class Timer(Model):
             'total_seconds REAL DEFAULT 0',
             'task_id INTEGER',
             'comment TEXT',
+            'report_id INTEGER',
             'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
             'updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
         ]

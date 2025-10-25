@@ -45,5 +45,23 @@ class B24Service:
                 }
             }
         )
+        if response.status_code == 200:
+            data = response.json()
+            return data['result']
+        return False
+    
+    def updateTime(self, taskId, reportId, time, comment):
+        response = requests.post(
+            os.getenv('B24_BASE_URL') + '/rest/task.elapseditem.update',
+            json={
+                'auth': os.getenv('CRM_TOKEN'),
+                'TASKID': taskId,
+                'ITEMID': reportId,
+                'ARFIELDS': {
+                    "SECONDS": time, 
+                    "COMMENT_TEXT": comment
+                }
+            }
+        )
         return response.status_code == 200
         

@@ -53,6 +53,9 @@ def main():
         print("Ошибка: TELEGRAM_BOT_TOKEN не найден в .env файле")
         return
     
+    # Обновляем токены Битрикса
+    B24Service().refreshTokens()
+    
     app = Application.builder().token(TOKEN).build()
     
     # Регистрируем обработчики команд
@@ -66,9 +69,6 @@ def main():
     
     print("Бот запущен...")
     app.run_polling()
-
-    # Обновляем токены Битрикса
-    B24Service().refreshTokens()
 
 if __name__ == "__main__":
     main()

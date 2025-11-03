@@ -13,7 +13,8 @@ class TimerController(Controller):
             "Используйте команды:\n"
             "/new название - создать таймер\n"
             "/plus название минуты - добавить время\n" 
-            "/delete название - удалить таймер"
+            "/diff название минуты - убавить время\n" 
+            "/delete название - удалить таймер\n"
         )
         await self.send_response(update, message)
     
@@ -72,6 +73,32 @@ class TimerController(Controller):
         
         # Вызов сервиса
         result = self.timer_service.add_minutes(user_id, timer_name, minutes)
+        await self.send_response(update, result)
+
+    async def diff_minutes(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик команды /diff"""
+        user_id = self.get_user_id(update)
+        
+        # Валидация
+        if len(context.args) < 2:
+            await self.send_response(update, "Используйте: /diff <название> <минуты>")
+            return
+        
+        try:
+            timer_name = ' '.join(context.args[:-1])
+            minutes = int(context.args[-1])
+            
+            # Валидация минут
+            if minutes <= 0:
+                await self.send_response(update, "Минуты должны быть положительным числом")
+                return
+                
+        except ValueError:
+            await self.send_response(update, "Минуты должны быть числом")
+            return
+        
+        # Вызов сервиса
+        result = self.timer_service.add_minutes(user_id, timer_name, -1 * minutes)
         await self.send_response(update, result)
     
     async def delete_timer(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

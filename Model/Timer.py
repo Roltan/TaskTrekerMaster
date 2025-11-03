@@ -1,4 +1,5 @@
 from Class.Model import Model
+from datetime import datetime, date
 
 class Timer(Model):
     def __init__(self, db_path: str = "timers.db"):
@@ -17,7 +18,8 @@ class Timer(Model):
         ]
     
     def get_timer(self, user_id: int, name: str):
-        return self.read_one({"user_id": user_id, "name": name})
+        today = date.today().isoformat()
+        return self.read_one({"user_id": user_id, "name": name, "DATE(created_at)": today})
     
     def get_today_timers(self, user_id: int):
         query = '''

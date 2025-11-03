@@ -63,6 +63,7 @@ def main():
     app.add_handler(CommandHandler("new", timer_controller.create_timer))
     app.add_handler(CommandHandler("plus", timer_controller.add_minutes))
     app.add_handler(CommandHandler("delete", timer_controller.delete_timer))
+    app.add_handler(CommandHandler("diff", timer_controller.diff_minutes))
     
     # Единый обработчик для всех сообщений
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_all_messages))

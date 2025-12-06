@@ -1,4 +1,5 @@
 from Class.Model import Model
+from Model import SubTimer
 from datetime import datetime, date
 
 class Timer(Model):

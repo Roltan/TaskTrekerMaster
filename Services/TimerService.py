@@ -1,5 +1,7 @@
 from datetime import datetime
 from Services.B24Service import B24Service
+from Services.SubTimerService import SubTimerService
+from Services.FolderService import FolderService
 from Model.User import User
 from Model.Timer import Timer
 from Model.Session import Session
@@ -10,6 +12,8 @@ class TimerService:
         self.user_model = User()
         self.timer_model = Timer()
         self.session_model = Session()
+        self.sub_timer_service = SubTimerService()
+        self.folder_service = FolderService()
     
     def get_reply_keyboard(self, user_id):
         from telegram import KeyboardButton, ReplyKeyboardMarkup
@@ -17,25 +21,85 @@ class TimerService:
         buttons = []
         stats_button = [KeyboardButton("📊 Статистика")]
         
-        # Получаем активные сессии напрямую из БД
-        active_sessions = self.session_model.get_active_sessions(user_id)
+        # Проверяем режим пользователя
+        user_mode = self.folder_service.get_mode(user_id)
         
+        # ПРОВЕРЯЕМ АКТИВНЫЕ СЕССИИ ПОД-ТАЙМЕРОВ
+        active_sessions = self.session_model.get_active_sessions(user_id)
+        active_sub_timer_session = None
+        
+        for session in active_sessions:
+            if session.get('sub_timer_name'):
+                active_sub_timer_session = session
+                break
+        
+        if active_sub_timer_session:
+            # ЕСТЬ АКТИВНЫЙ ПОД-ТАЙМЕР - показываем только кнопку остановки
+            buttons.append([KeyboardButton(f"⏹️ Стоп {active_sub_timer_session['sub_timer_name']}")])
+            return ReplyKeyboardMarkup(buttons + [stats_button], resize_keyboard=True)
+        
+        if user_mode['mode'] == 'folder':
+            # РЕЖИМ ПАПКИ (без активных под-таймеров)
+            parent_timer_name = user_mode['parent_timer']
+            
+            # Проверяем, что родительский таймер существует
+            timer = self.timer_model.get_timer(user_id, parent_timer_name)
+            if not timer:
+                # Если таймер не найден, возвращаемся в нормальный режим
+                self.folder_service.set_normal_mode(user_id)
+                return self.get_reply_keyboard(user_id)
+            
+            sub_timers = self.sub_timer_service.get_sub_timers(user_id, parent_timer_name)
+            
+            # Кнопки для под-таймеров
+            for sub_timer in sub_timers:
+                buttons.append([KeyboardButton(f"▶️ Старт {sub_timer['name']}")])
+            
+            # Кнопка для запуска родительского таймера
+            buttons.append([KeyboardButton(f"▶️ Запустить {parent_timer_name}")])
+            
+            # Кнопка возврата в нормальный режим
+            buttons.append([KeyboardButton(f"🔙 Назад к таймерам")])
+            
+            return ReplyKeyboardMarkup(buttons + [stats_button], resize_keyboard=True)
+        
+        # НОРМАЛЬНЫЙ РЕЖИМ (без активных под-таймеров)
+        # Получаем активные сессии напрямую из БД
         if bool(active_sessions):
-            # Показываем только кнопку остановки активного таймера
-            for session in active_sessions:
-                buttons.append([KeyboardButton(f"⏹️ Стоп {session['timer_name']}")])
-                break  # Только один активный таймер
+            # Проверяем, есть ли активный под-таймер
+            has_active_sub_timer = any(session.get('sub_timer_name') for session in active_sessions)
+            
+            if not has_active_sub_timer:
+                # Показываем кнопки для активного таймера (только если нет активных под-таймеров)
+                for session in active_sessions:
+                    # Основная кнопка остановки
+                    buttons.append([KeyboardButton(f"⏹️ Стоп {session['timer_name']}")])
+                    # Кнопка создания под-таймера (только для обычных таймеров)
+                    if not session.get('sub_timer_name'):
+                        buttons.append([KeyboardButton(f"📁 Создать под-таймер")])
+                    break  # Только один активный таймер
         else:
             # Показываем кнопки старта для всех сегодняшних таймеров пользователя
             today_timers = self.timer_model.get_today_timers(user_id)
             for timer in today_timers:
-                buttons.append([KeyboardButton(f"▶️ Старт {timer['name']}")])
+                # Проверяем, есть ли у таймера под-таймеры
+                sub_timers = self.sub_timer_service.get_sub_timers(user_id, timer['name'])
+                if sub_timers:
+                    # У таймера есть под-таймеры - показываем как папку
+                    buttons.append([KeyboardButton(f"📁 {timer['name']}")])
+                else:
+                    # Обычный таймер без под-таймеров
+                    buttons.append([KeyboardButton(f"▶️ Старт {timer['name']}")])
             buttons.append([KeyboardButton(f"Отчёт")])
         
         return ReplyKeyboardMarkup(buttons + [stats_button], resize_keyboard=True)
     
     def start_timer(self, user_id, timer_name):
         """Запуск таймера с проверкой существования в БД"""
+        # Если пользователь в режиме папки, выходим из него при запуске таймера
+        if self.folder_service.is_in_folder_mode(user_id):
+            self.folder_service.set_normal_mode(user_id)
+
         # Проверяем существование таймера
         timer = self.timer_model.get_timer(user_id, timer_name)
         if not timer:
@@ -68,11 +132,15 @@ class TimerService:
         active_sessions = self.session_model.get_active_sessions(user_id)
         session_id = None
         for session in active_sessions:
-            if session['timer_name'] == timer_name:
+            if session['timer_name'] == timer_name and not session.get('sub_timer_name'):
                 session_id = session['id']
                 break
         
         if not session_id:
+            # Проверяем, не является ли это сессией под-таймера
+            for session in active_sessions:
+                if session.get('sub_timer_name'):
+                    return f"Сначала остановите под-таймер '{session['sub_timer_name']}'"
             return f"Таймер '{timer_name}' не был запущен!"
         
         # Останавливаем таймер
@@ -87,7 +155,8 @@ class TimerService:
         delta = now - start_time
         duration_seconds = delta.total_seconds()
         
-        # Обновляем общее время в БД
+        # ВСЁ время сессии добавляем к общему времени таймера
+        # Под-таймеры не влияют на общее время родительского таймера
         self.timer_model.add_time_to_timer(user_id, timer_name, duration_seconds)
         
         # Завершаем сессию в БД
@@ -98,8 +167,26 @@ class TimerService:
         # Получаем актуальные данные из БД для отчета
         updated_timer = self.timer_model.get_timer(user_id, timer_name)
         total_seconds = updated_timer['total_seconds'] if updated_timer else 0
+        total_minutes = total_seconds / 60
         hours = int(total_seconds // 3600)
-        minutes = int((total_seconds % 3600) // 60)
+        minutes = int(total_minutes % 60)
+        
+        # Добавляем информацию о под-таймерах, если они есть
+        sub_timers = self.sub_timer_service.get_sub_timers(user_id, timer_name)
+        if sub_timers:
+            sub_timers_info = []
+            
+            for sub_timer in sub_timers:
+                sub_minutes = sub_timer['duration_seconds'] / 60
+                # Округляем до целых минут для единообразия
+                sub_timers_info.append(f"    - {sub_timer['name']} - {int(round(sub_minutes))} мин")
+            
+            return (
+                f"Таймер '{timer_name}' остановлен\n"
+                f"Сессия: {duration_seconds/60:.1f} минут\n"
+                f"Всего времени: {int(total_minutes)} мин\n"
+                f"Под-таймеры:\n" + "\n".join(sub_timers_info)
+            )
         
         return (
             f"Таймер '{timer_name}' остановлен\n"
@@ -160,7 +247,7 @@ class TimerService:
         return f"Таймер '{timer_name}' удален!"
     
     def get_statistics(self, user_id):
-        """Получение статистики по сегодняшним таймерам пользователя"""
+        """Получение статистики по сегодняшним таймерам пользователя с под-таймерами"""
         today_timers = self.timer_model.get_today_timers(user_id)
         
         if not today_timers:
@@ -170,8 +257,9 @@ class TimerService:
         total_day_seconds = 0
         active_sessions = self.session_model.get_active_sessions(user_id)
         
-        # Создаем множество активных таймеров для быстрого поиска
-        active_timer_names = {session['timer_name'] for session in active_sessions}
+        # Создаем множество активных таймеров и под-таймеров для быстрого поиска
+        active_timer_names = {session['timer_name'] for session in active_sessions if not session.get('sub_timer_name')}
+        active_sub_timer_names = {session['sub_timer_name'] for session in active_sessions if session.get('sub_timer_name')}
 
         for timer in today_timers:
             total_seconds = timer['total_seconds']
@@ -182,8 +270,25 @@ class TimerService:
             minutes = int((total_hours - hours) * 60)
             
             # Статус по активным сессиям
-            status = "⏳" if timer['name'] in active_timer_names else "⏹"
-            stats.append(f"{status} [{timer['name']}] {total_hours:.2f}h ({hours}h {minutes}m)")
+            timer_name = timer['name']
+            status = "⏳" if timer_name in active_timer_names else "⏹"
+            stats.append(f"{status} [{timer_name}] {total_hours:.2f}h ({hours}h {minutes}m)")
+            
+            # Получаем под-таймеры для этого таймера
+            sub_timers = self.sub_timer_service.get_sub_timers(user_id, timer_name)
+            
+            if sub_timers:
+                # Сортируем под-таймеры по времени создания
+                sorted_sub_timers = sorted(sub_timers, key=lambda x: x.get('created_at', ''))
+                
+                for sub_timer in sorted_sub_timers:
+                    sub_timer_name = sub_timer['name']
+                    sub_seconds = sub_timer['duration_seconds']
+                    sub_minutes = int(round(sub_seconds / 60))  # Время в минутах, округленное до целых
+                    
+                    # Статус для под-таймеров
+                    sub_status = "⏳" if sub_timer_name in active_sub_timer_names else ""
+                    stats.append(f"    {sub_status}- {sub_timer_name} - {sub_minutes}")
         
         # Подсчёт общего времени за день
         total_day_hours = total_day_seconds / 3600

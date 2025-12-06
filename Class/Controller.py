@@ -1,10 +1,12 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 from Services.TimerService import TimerService
+from Model.Session import Session
 
 class Controller:
     def __init__(self):
         self.timer_service = TimerService()
+        self.session_model = Session()
     
     def get_user_id(self, update: Update):
         """Получение ID пользователя"""

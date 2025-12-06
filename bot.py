@@ -4,6 +4,8 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 from Controllers.TimerController import TimerController
 from Controllers.ReportController import ReportController
+from Controllers.SubTimerController import SubTimerController
+from Controllers.FolderController import FolderController
 from Services.B24Service import B24Service
 
 # Загружаем переменные окружения
@@ -14,12 +16,15 @@ TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 # Создаем контроллеры
 timer_controller = TimerController()
 report_controller = ReportController()
+sub_timer_controller = SubTimerController()
+folder_controller = FolderController()
 
 async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Универсальный обработчик для диалогов и кнопок"""
     user_message = update.message.text
+    user_id = update.effective_user.id
 
-    # 1. Сначала проверяем, не находимся ли мы в диалоге с ReportService
+    # 1. Сначала проверяем, не находимся ли мы в диалоге
     if context.user_data.get('awaiting_task_id'):
         await report_controller.handle_task_id_response(update, context)
         return
@@ -27,8 +32,47 @@ async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE
     if context.user_data.get('awaiting_comment'):
         await report_controller.handle_comment_response(update, context)
         return
+    
+    # 2. Добавляем обработку диалога создания под-таймера
+    if context.user_data.get('awaiting_sub_timer_name'):
+        await sub_timer_controller.handle_sub_timer_name_response(update, context)
+        return
 
-    # 2. Если не в диалоге, обрабатываем кнопки
+    # 3. Проверяем режим папки
+    timer_service = timer_controller.timer_service
+    folder_service = timer_service.folder_service
+    
+    if folder_service.is_in_folder_mode(user_id):
+        # РЕЖИМ ПАПКИ
+        if user_message.startswith("▶️ Старт "):
+            await folder_controller.start_sub_timer(update, context)
+            return
+        
+        if user_message.startswith("⏹️ Стоп "):
+            await folder_controller.stop_sub_timer(update, context)
+            return
+        
+        if user_message.startswith("▶️ Запустить "):
+            await folder_controller.start_parent_timer_in_folder(update, context)
+            return
+        
+        if user_message == "🔙 Назад к таймерам":
+            await folder_controller.exit_folder_mode(update, context)
+            return
+    else:
+        # НОРМАЛЬНЫЙ РЕЖИМ
+        if user_message.startswith("▶️ Старт "):
+            await timer_controller.start_timer(update, context)
+            return
+        
+        if user_message.startswith("⏹️ Стоп "):
+            await timer_controller.stop_timer(update, context)
+            return
+        
+        if user_message.startswith("📁 "):
+            await folder_controller.enter_folder_mode(update, context)
+            return
+    
     if user_message == "📊 Статистика":
         await timer_controller.show_statistics(update, context)
         return
@@ -37,12 +81,8 @@ async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE
         await report_controller.generate_report(update, context)
         return
     
-    if user_message.startswith("▶️ Старт "):
-        await timer_controller.start_timer(update, context)
-        return
-    
-    if user_message.startswith("⏹️ Стоп "):
-        await timer_controller.stop_timer(update, context)
+    if user_message == "📁 Создать под-таймер":
+        await sub_timer_controller.create_sub_timer_dialog(update, context)
         return
     
     # Если сообщение не распознано

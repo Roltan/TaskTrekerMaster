@@ -22,7 +22,6 @@ folder_controller = FolderController()
 async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Универсальный обработчик для диалогов и кнопок"""
     user_message = update.message.text
-    user_id = update.effective_user.id
 
     # 1. Сначала проверяем, не находимся ли мы в диалоге
     if context.user_data.get('awaiting_task_id'):
@@ -38,11 +37,24 @@ async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE
         await sub_timer_controller.handle_sub_timer_name_response(update, context)
         return
 
-    # 3. Проверяем режим папки
-    timer_service = timer_controller.timer_service
-    folder_service = timer_service.folder_service
+    # 3. Обрабатываем специальные кнопки (не зависящие от режима)
+    if user_message == "📊 Статистика":
+        await timer_controller.show_statistics(update, context)
+        return
     
-    if folder_service.is_in_folder_mode(user_id):
+    if user_message == "Отчёт":
+        await report_controller.generate_report(update, context)
+        return
+    
+    if user_message == "📁 Создать под-таймер":
+        await sub_timer_controller.create_sub_timer_dialog(update, context)
+        return
+    
+    # 4. Проверяем режим папки
+    user_id = update.effective_user.id
+    timer_service = timer_controller.timer_service
+    
+    if timer_service.folder_service.is_in_folder_mode(user_id):
         # РЕЖИМ ПАПКИ
         if user_message.startswith("▶️ Старт "):
             await folder_controller.start_sub_timer(update, context)
@@ -72,18 +84,6 @@ async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE
         if user_message.startswith("📁 "):
             await folder_controller.enter_folder_mode(update, context)
             return
-    
-    if user_message == "📊 Статистика":
-        await timer_controller.show_statistics(update, context)
-        return
-    
-    if user_message == "Отчёт":
-        await report_controller.generate_report(update, context)
-        return
-    
-    if user_message == "📁 Создать под-таймер":
-        await sub_timer_controller.create_sub_timer_dialog(update, context)
-        return
     
     # Если сообщение не распознано
     await timer_controller.send_response(update, "Команда не распознана")

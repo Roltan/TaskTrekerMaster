@@ -128,12 +128,12 @@ class TimerController(Controller):
         timer_name = update.message.text.replace("▶️ Старт ", "").strip()
         
         # Сначала проверяем, не пытается ли пользователь запустить под-таймер в режиме папки
-        if self.timer_service.folder_service.is_in_folder_mode(user_id):
-            # Пользователь в режиме папки - передаем управление в FolderController
-            from Controllers.FolderController import FolderController
-            folder_controller = FolderController()
-            await folder_controller.start_sub_timer(update, context)
-            return
+        # if self.timer_service.folder_service.is_in_folder_mode(user_id):
+        #     # Пользователь в режиме папки - передаем управление в FolderController
+        #     from Controllers.FolderController import FolderController
+        #     folder_controller = FolderController()
+        #     await folder_controller.start_sub_timer(update, context)
+        #     return
         
         # Если не в режиме папки, продолжаем обычную логику
         if not timer_name:

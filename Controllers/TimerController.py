@@ -1,8 +1,13 @@
 from Class.Controller import Controller
 from telegram import Update
 from telegram.ext import ContextTypes
+from Services.SubTimerService import SubTimerService
 
 class TimerController(Controller):
+    def __init__(self):
+        super().__init__()
+        self.sub_timer_service = SubTimerService()
+
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /start"""
         user_id = self.get_user_id(update)
@@ -55,7 +60,7 @@ class TimerController(Controller):
         
         # Валидация
         if len(context.args) < 2:
-            await self.send_response(update, "Используйте: /plus <название> <минуты>")
+            await self.send_response(update, "Используйте:\n/plus <название> <минуты>\n/plus <родитель:подтаймер> <минуты>")
             return
         
         try:
@@ -71,9 +76,28 @@ class TimerController(Controller):
             await self.send_response(update, "Минуты должны быть числом")
             return
         
-        # Вызов сервиса
-        result = self.timer_service.add_minutes(user_id, timer_name, minutes)
-        await self.send_response(update, result)
+        # Проверяем, является ли это под-таймером (формат "родитель:подтаймер")
+        if ':' in timer_name:
+            # Это под-таймер
+            parts = timer_name.split(':')
+            if len(parts) != 2:
+                await self.send_response(update, "Неверный формат. Используйте: /plus родитель:подтаймер минуты")
+                return
+            
+            parent_timer_name, sub_timer_name = parts[0].strip(), parts[1].strip()
+            
+            if not parent_timer_name or not sub_timer_name:
+                await self.send_response(update, "Не указано название родителя или под-таймера")
+                return
+            
+            # Вызываем метод для добавления времени к под-таймеру через TimerService
+            result = self.timer_service.add_minutes_to_sub_timer(user_id, parent_timer_name, sub_timer_name, minutes)
+            await self.send_response(update, result)
+        else:
+            # Это обычный таймер
+            # Вызов сервиса
+            result = self.timer_service.add_minutes(user_id, timer_name, minutes)
+            await self.send_response(update, result)
 
     async def diff_minutes(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /diff"""
@@ -81,7 +105,7 @@ class TimerController(Controller):
         
         # Валидация
         if len(context.args) < 2:
-            await self.send_response(update, "Используйте: /diff <название> <минуты>")
+            await self.send_response(update, "Используйте:\n/diff <название> <минуты>\n/diff <родитель:подтаймер> <минуты>")
             return
         
         try:
@@ -97,9 +121,28 @@ class TimerController(Controller):
             await self.send_response(update, "Минуты должны быть числом")
             return
         
-        # Вызов сервиса
-        result = self.timer_service.add_minutes(user_id, timer_name, -1 * minutes)
-        await self.send_response(update, result)
+        # Проверяем, является ли это под-таймером (формат "родитель:подтаймер")
+        if ':' in timer_name:
+            # Это под-таймер
+            parts = timer_name.split(':')
+            if len(parts) != 2:
+                await self.send_response(update, "Неверный формат. Используйте: /diff родитель:подтаймер минуты")
+                return
+            
+            parent_timer_name, sub_timer_name = parts[0].strip(), parts[1].strip()
+            
+            if not parent_timer_name or not sub_timer_name:
+                await self.send_response(update, "Не указано название родителя или под-таймера")
+                return
+            
+            # Вызываем метод для вычитания времени из под-таймера (отрицательное значение)
+            result = self.timer_service.add_minutes_to_sub_timer(user_id, parent_timer_name, sub_timer_name, -minutes)
+            await self.send_response(update, result)
+        else:
+            # Это обычный таймер
+            # Вызов сервиса с отрицательным значением
+            result = self.timer_service.add_minutes(user_id, timer_name, -1 * minutes)
+            await self.send_response(update, result)
     
     async def delete_timer(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /delete"""

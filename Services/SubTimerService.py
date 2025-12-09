@@ -55,3 +55,43 @@ class SubTimerService:
         new_duration = total_timer_seconds - existing_sub_timers_duration
         
         return max(new_duration, 0)  # Не возвращаем отрицательные значения
+    
+    def add_minutes_to_sub_timer(self, user_id: int, parent_timer_name: str, sub_timer_name: str, minutes: int):
+        """Добавить время к под-таймеру"""
+        # Ищем под-таймер
+        sub_timers = self.sub_timer_model.read({
+            "user_id": user_id,
+            "parent_timer_name": parent_timer_name,
+            "name": sub_timer_name
+        })
+        
+        if not sub_timers:
+            return None
+        
+        sub_timer = sub_timers[0]
+        seconds_to_add = minutes * 60
+        current_duration = sub_timer['duration_seconds'] if sub_timer['duration_seconds'] else 0
+        new_duration = current_duration + seconds_to_add
+        
+        # Проверяем, чтобы не уйти в отрицательное значение
+        if new_duration < 0:
+            new_duration = 0
+            # Корректируем секунды для добавления
+            seconds_to_add = -current_duration
+        
+        # Обновляем под-таймер
+        success = self.sub_timer_model.update(
+            {"duration_seconds": new_duration},
+            {"user_id": user_id, "parent_timer_name": parent_timer_name, "name": sub_timer_name}
+        )
+        
+        if not success:
+            return None
+        
+        # Возвращаем не словарь, а просто данные для удобства
+        return {
+            'sub_timer_name': sub_timer_name,
+            'added_minutes': seconds_to_add / 60,  # Корректированные минуты
+            'total_minutes': new_duration / 60,
+            'success': True
+        }

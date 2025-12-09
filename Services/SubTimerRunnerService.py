@@ -74,31 +74,43 @@ class SubTimerRunnerService:
         delta = now - start_time
         duration_seconds = delta.total_seconds()
         
-        # 1. Обновляем время под-таймера в БД
-        existing_duration = session_data['duration_seconds'] if session_data['duration_seconds'] else 0
+        # 1. Получаем ТЕКУЩЕЕ время под-таймера из таблицы sub_timers
+        sub_timers = self.sub_timer_model.read({
+            "user_id": user_id,
+            "parent_timer_name": parent_timer_name,
+            "name": sub_timer_name
+        })
+        
+        if not sub_timers:
+            return f"Под-таймер '{sub_timer_name}' не найден в базе данных"
+        
+        current_sub_timer = sub_timers[0]
+        existing_duration = current_sub_timer['duration_seconds'] if current_sub_timer['duration_seconds'] else 0
         new_duration = existing_duration + duration_seconds
         
+        # 2. Обновляем время под-таймера в БД
         self.sub_timer_model.update(
             {"duration_seconds": new_duration},
             {"user_id": user_id, "parent_timer_name": parent_timer_name, "name": sub_timer_name}
         )
         
-        # 2. ВРЕМЯ ПОД-ТАЙМЕРА ДОБАВЛЯЕТСЯ К РОДИТЕЛЬСКОМУ ТАЙМЕРУ
+        # 3. ВРЕМЯ ПОД-ТАЙМЕРА ДОБАВЛЯЕТСЯ К РОДИТЕЛЬСКОМУ ТАЙМЕРУ
         self.timer_model.add_time_to_timer(user_id, parent_timer_name, duration_seconds)
         
-        # 3. Завершаем сессию
+        # 4. Завершаем сессию
         success = self.session_model.stop_session(session_id, now, duration_seconds)
         if not success:
             return f"Ошибка при остановке под-таймера '{sub_timer_name}'"
         
-        # 4. Получаем обновленные данные для отчета
+        # 5. Получаем обновленные данные для отчета
         parent_timer = self.timer_model.get_timer(user_id, parent_timer_name)
         parent_total_seconds = parent_timer['total_seconds'] if parent_timer else 0
         parent_minutes = parent_total_seconds / 60
         
         minutes = new_duration / 60
         return (
-            f"Под-таймер '{sub_timer_name}' остановлен ({minutes:.1f} минут)\n"
+            f"Под-таймер '{sub_timer_name}' остановлен ({duration_seconds/60:.1f} минут)\n"
+            f"Всего под-таймера: {minutes:.1f} минут\n"
             f"Добавлено к '{parent_timer_name}': {duration_seconds/60:.1f} минут\n"
             f"Всего '{parent_timer_name}': {parent_minutes:.1f} минут"
         )

@@ -305,6 +305,35 @@ class TimerService:
         
         return "\n".join(result)
 
+    def add_minutes_to_sub_timer(self, user_id, parent_timer_name, sub_timer_name, minutes):
+        """Добавление времени к под-таймеру"""
+        # Проверяем существование родительского таймера
+        parent_timer = self.timer_model.get_timer(user_id, parent_timer_name)
+        if not parent_timer:
+            return f"Родительский таймер '{parent_timer_name}' не найден"
+        
+        # Добавляем время к под-таймеру через SubTimerService
+        result = self.sub_timer_service.add_minutes_to_sub_timer(user_id, parent_timer_name, sub_timer_name, minutes)
+        
+        if not result:
+            return f"Под-таймер '{sub_timer_name}' не найден в папке '{parent_timer_name}'"
+        
+        # Также добавляем время к родительскому таймеру
+        seconds_to_add = minutes * 60
+        self.timer_model.add_time_to_timer(user_id, parent_timer_name, seconds_to_add)
+        
+        # Получаем обновленные данные родителя
+        updated_parent_timer = self.timer_model.get_timer(user_id, parent_timer_name)
+        parent_total_seconds = updated_parent_timer['total_seconds'] if updated_parent_timer else 0
+        parent_hours = int(parent_total_seconds // 3600)
+        parent_minutes_total = int((parent_total_seconds % 3600) // 60)
+        
+        return (
+            f"К под-таймеру '{parent_timer_name}:{sub_timer_name}' добавлено {minutes} минут\n"
+            f"Всего под-таймера: {result['total_minutes']:.1f} минут\n"
+            f"Всего родителя '{parent_timer_name}': {parent_hours}h {parent_minutes_total}m"
+        )
+
     def clear_all_timers(self, user_id):
         """Очистка всех таймеров пользователя (для команды старт)"""
         # Останавливаем все активные таймеры

@@ -84,6 +84,7 @@ class TimerService:
             for timer in today_timers:
                 # Проверяем, есть ли у таймера под-таймеры
                 sub_timers = self.sub_timer_service.get_sub_timers(user_id, timer['name'])
+                print(sub_timers)
                 if sub_timers:
                     # У таймера есть под-таймеры - показываем как папку
                     buttons.append([KeyboardButton(f"📁 {timer['name']}")])

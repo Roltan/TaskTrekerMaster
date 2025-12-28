@@ -40,6 +40,9 @@ class Timer(Model):
         return True
     
     def create_timer(self, user_id: int, name: str, task_id: str = '', timer_type: int = 2):
+        timer = self.get_timer(user_id, name)
+        if(timer != None): 
+            return False
         comment_map = {3: 'кч', 2: 'нкч', 1: 'баги', 0: ''}
         comment = comment_map.get(timer_type, '')
         

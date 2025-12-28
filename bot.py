@@ -94,7 +94,7 @@ def main():
         return
     
     # Обновляем токены Битрикса
-    B24Service().refreshTokens()
+    # B24Service().refreshTokens()
     
     app = Application.builder().token(TOKEN).build()
     

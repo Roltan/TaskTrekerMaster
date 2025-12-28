@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from Model.SubTimer import SubTimer
 from Model.Session import Session
 from Model.Timer import Timer  # Добавляем импорт
@@ -11,9 +11,11 @@ class SubTimerService:
     
     def get_sub_timers(self, user_id: int, parent_timer_name: str):
         """Получить все под-таймеры для родительского таймера"""
+        today = date.today().isoformat()
         return self.sub_timer_model.read({
             "user_id": user_id,
-            "parent_timer_name": parent_timer_name
+            "parent_timer_name": parent_timer_name,
+            "DATE(created_at)": today
         })
     
     def get_total_duration_for_parent(self, user_id: int, parent_timer_name: str) -> float:

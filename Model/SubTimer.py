@@ -18,7 +18,7 @@ class SubTimer(Model):
         query = '''
             SELECT SUM(duration_seconds) as total 
             FROM sub_timers 
-            WHERE user_id = ? AND parent_timer_name = ? AND created_at = DATE('now')
+            WHERE user_id = ? AND parent_timer_name = ? AND DATE(created_at) = DATE('now')
         '''
         result = self.execute_custom_query(query, [user_id, parent_timer_name])
         return result[0]['total'] if result and result[0]['total'] else 0

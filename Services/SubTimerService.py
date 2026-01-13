@@ -52,7 +52,7 @@ class SubTimerService:
         
         # Получаем общее время всех существующих под-таймеров
         existing_sub_timers_duration = self.get_total_duration_for_parent(user_id, parent_timer_name)
-        
+        print(existing_sub_timers_duration)
         # Время для нового под-таймера = всё время таймера - время существующих под-таймеров
         new_duration = total_timer_seconds - existing_sub_timers_duration
         

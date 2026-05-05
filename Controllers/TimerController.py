@@ -8,6 +8,13 @@ class TimerController(Controller):
         super().__init__()
         self.sub_timer_service = SubTimerService()
 
+    async def baby_time(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик кнопки BabyTime"""
+        user_id = self.get_user_id(update)
+        result = self.timer_service.baby_time(user_id)
+        keyboard = self.timer_service.get_reply_keyboard(user_id)
+        await update.message.reply_text(result, reply_markup=keyboard)
+
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /start"""
         user_id = self.get_user_id(update)

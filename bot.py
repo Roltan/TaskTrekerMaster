@@ -42,12 +42,16 @@ async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE
         await timer_controller.show_statistics(update, context)
         return
     
-    if user_message == "Отчёт":
-        await report_controller.generate_report(update, context)
-        return
+    # if user_message == "Отчёт":
+        # await report_controller.generate_report(update, context)
+        # return
     
     if user_message == "📁 Создать под-таймер":
         await sub_timer_controller.create_sub_timer_dialog(update, context)
+        return
+    
+    if user_message == "👶 BabyTime":
+        await timer_controller.baby_time(update, context)
         return
     
     # 4. Проверяем режим папки

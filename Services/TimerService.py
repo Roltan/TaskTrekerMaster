@@ -8,6 +8,7 @@ from Model.Session import Session
 
 class TimerService:
     def __init__(self):
+        self.BABY_TIMER_NAME = "👶 BabyTime"
         self.b24 = B24Service()
         self.user_model = User()
         self.timer_model = Timer()
@@ -15,11 +16,37 @@ class TimerService:
         self.sub_timer_service = SubTimerService()
         self.folder_service = FolderService()
     
+    def baby_time(self, user_id):
+        """Остановить текущий таймер, создать/запустить BabyTime"""
+        # Останавливаем активный таймер (если есть)
+        active_sessions = self.session_model.get_active_sessions(user_id)
+        for session in active_sessions:
+            if not session.get('sub_timer_name'):
+                self.stop_timer(user_id, session['timer_name'])
+                break
+
+        # Создаём таймер если не существует
+        timer = self.timer_model.get_timer(user_id, self.BABY_TIMER_NAME)
+        if not timer:
+            self.timer_model.create_timer(user_id, self.BABY_TIMER_NAME, 0, 0)
+
+        # Запускаем
+        return self.start_timer(user_id, self.BABY_TIMER_NAME)
+
     def get_reply_keyboard(self, user_id):
         from telegram import KeyboardButton, ReplyKeyboardMarkup
-        
+
         buttons = []
         stats_button = [KeyboardButton("📊 Статистика")]
+
+        # Проверяем, запущен ли сейчас BabyTime
+        active_sessions = self.session_model.get_active_sessions(user_id)
+        baby_is_running = any(
+            s['timer_name'] == self.BABY_TIMER_NAME and not s.get('sub_timer_name')
+            for s in active_sessions
+        )
+        if not baby_is_running:
+            stats_button.append(KeyboardButton("👶 BabyTime"))
         
         # Проверяем режим пользователя
         user_mode = self.folder_service.get_mode(user_id)
@@ -82,6 +109,8 @@ class TimerService:
             # Показываем кнопки старта для всех сегодняшних таймеров пользователя
             today_timers = self.timer_model.get_today_timers(user_id)
             for timer in today_timers:
+                if timer['name'] == self.BABY_TIMER_NAME:
+                    continue
                 # Проверяем, есть ли у таймера под-таймеры
                 sub_timers = self.sub_timer_service.get_sub_timers(user_id, timer['name'])
                 if sub_timers:
@@ -90,7 +119,7 @@ class TimerService:
                 else:
                     # Обычный таймер без под-таймеров
                     buttons.append([KeyboardButton(f"▶️ Старт {timer['name']}")])
-            buttons.append([KeyboardButton(f"Отчёт")])
+            # buttons.append([KeyboardButton(f"Отчёт")])
         
         return ReplyKeyboardMarkup(buttons + [stats_button], resize_keyboard=True)
     

@@ -1,51 +1,18 @@
 @echo off
 chcp 65001 >nul
-setlocal enabledelayedexpansion
 
-:: Переходим в директорию скрипта
-cd /d "%~dp0"
-
+set BOT_PROCESS=pythonw.exe
 set BOT_SCRIPT=bot.py
-set PYTHON_PATH=C:\Python314\pythonw.exe
-set SCREENPIPE_PATH=D:\screenpipe\screenpipe-app.exe
 
-:: Проверка запущенного бота (python.exe или pythonw.exe)
-wmic process where "name='python.exe' or name='pythonw.exe'" get commandline | find /i "%BOT_SCRIPT%" > nul
+:: Проверка запущенного бота
+wmic process where "name='%BOT_PROCESS%'" get commandline | find /i "%BOT_SCRIPT%" > nul
 
-if !errorlevel! == 0 (
-    :: Если бот запущен - останавливаем его
-    wmic process where "(name='python.exe' or name='pythonw.exe') and commandline like '%%%BOT_SCRIPT%%%'" delete > nul
-
-    :: Останавливаем Screenpipe, если он запущен
-    tasklist /FI "IMAGENAME eq screenpipe-app.exe" 2>NUL | find /I /N "screenpipe-app.exe">NUL
-    if !errorlevel! == 0 (
-        taskkill /F /IM screenpipe-app.exe >nul 2>nul
-    )
-
-    powershell -command "[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.MessageBox]::Show('Бот и Screenpipe остановлены', 'TaskTracker', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)"
+if %errorlevel% == 0 (
+    :: Если бот запущен - останавливаем все соответствующие процессы
+    wmic process where "name='%BOT_PROCESS%' and commandline like '%%%BOT_SCRIPT%%%'" delete > nul
+    powershell -command "[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.MessageBox]::Show('Бот успешно остановлен', 'Уведомление', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)"
 ) else (
-    :: Проверяем, запущен ли Screenpipe
-    tasklist /FI "IMAGENAME eq screenpipe-app.exe" 2>NUL | find /I /N "screenpipe-app.exe">NUL
-
-    if !errorlevel! neq 0 (
-        :: Screenpipe не запущен - пытаемся запустить (свернутым в трей)
-        if defined SCREENPIPE_PATH (
-            if exist "%SCREENPIPE_PATH%" (
-                echo Запускаю Screenpipe...
-                start "" /min "%SCREENPIPE_PATH%"
-                :: Ждем 10 секунд пока Screenpipe запустится
-                timeout /t 10 /nobreak >nul
-            ) else (
-                echo ВНИМАНИЕ: Screenpipe не найден по пути: %SCREENPIPE_PATH%
-                echo Запускаю только бота...
-            )
-        ) else (
-            echo ВНИМАНИЕ: Путь к Screenpipe не настроен в bat-файле
-            echo Запускаю только бота...
-        )
-    )
-
-    :: Запускаем бота
-    start "" "%PYTHON_PATH%" %BOT_SCRIPT%
-    powershell -command "[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.MessageBox]::Show('Бот запущен', 'TaskTracker', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)"
+    :: Если бот не запущен - запускаем
+    start "" %BOT_PROCESS% %BOT_SCRIPT%
+    powershell -command "[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.MessageBox]::Show('Бот успешно запущен', 'Уведомление', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)"
 )

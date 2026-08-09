@@ -7,6 +7,9 @@ cd /d "%~dp0"
 
 set BOT_SCRIPT=bot.py
 set PYTHON_PATH=C:\Python314\pythonw.exe
+
+:: НАСТРОЙКА: Укажи путь к Screenpipe-app.exe или ярлыку
+:: Пример: set SCREENPIPE_PATH=D:\screenpipe\screenpipe-app.exe
 set SCREENPIPE_PATH=D:\screenpipe\screenpipe-app.exe
 
 :: Проверка запущенного бота (python.exe или pythonw.exe)

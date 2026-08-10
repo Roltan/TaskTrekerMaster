@@ -1,4 +1,5 @@
 from datetime import datetime
+from Services.ScreenpipeService import screenpipe_service
 from Model.SubTimer import SubTimer
 from Model.Session import Session
 from Model.Timer import Timer
@@ -45,7 +46,7 @@ class SubTimerRunnerService:
         
         if not session_id:
             return None
-        
+
         return f"Под-таймер '{sub_timer_name}' запущен!"
     
     def stop_sub_timer(self, user_id: int, parent_timer_name: str, sub_timer_name: str):
@@ -101,7 +102,10 @@ class SubTimerRunnerService:
         success = self.session_model.stop_session(session_id, now, duration_seconds)
         if not success:
             return f"Ошибка при остановке под-таймера '{sub_timer_name}'"
-        
+
+        # Сохраняем запись в Screenpipe Memory с тегом подтаймера
+        screenpipe_service.save_task_memory(f"{parent_timer_name}:{sub_timer_name}", start_time, now, duration_seconds)
+
         # 5. Получаем обновленные данные для отчета
         parent_timer = self.timer_model.get_timer(user_id, parent_timer_name)
         parent_total_seconds = parent_timer['total_seconds'] if parent_timer else 0

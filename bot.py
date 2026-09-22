@@ -1,10 +1,5 @@
 import os
-import asyncio
 from dotenv import load_dotenv
-
-# Загружаем переменные окружения ПЕРЕД импортом сервисов
-load_dotenv()
-
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 from Controllers.TimerController import TimerController
@@ -12,6 +7,9 @@ from Controllers.ReportController import ReportController
 from Controllers.SubTimerController import SubTimerController
 from Controllers.FolderController import FolderController
 from Services.B24Service import B24Service
+
+# Загружаем переменные окружения
+load_dotenv()
 
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 
@@ -98,29 +96,22 @@ def main():
     if not TOKEN:
         print("Ошибка: TELEGRAM_BOT_TOKEN не найден в .env файле")
         return
-
+    
     # Обновляем токены Битрикса
     # B24Service().refreshTokens()
-
-    # Создаем event loop для Python 3.14+
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
+    
     app = Application.builder().token(TOKEN).build()
-
+    
     # Регистрируем обработчики команд
     app.add_handler(CommandHandler("start", timer_controller.start))
     app.add_handler(CommandHandler("new", timer_controller.create_timer))
     app.add_handler(CommandHandler("plus", timer_controller.add_minutes))
     app.add_handler(CommandHandler("delete", timer_controller.delete_timer))
     app.add_handler(CommandHandler("diff", timer_controller.diff_minutes))
-
+    
     # Единый обработчик для всех сообщений
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_all_messages))
-
+    
     print("Бот запущен...")
     app.run_polling()
 

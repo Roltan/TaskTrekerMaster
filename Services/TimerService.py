@@ -2,7 +2,6 @@ from datetime import datetime
 from Services.B24Service import B24Service
 from Services.SubTimerService import SubTimerService
 from Services.FolderService import FolderService
-from Services.ScreenpipeService import screenpipe_service
 from Model.User import User
 from Model.Timer import Timer
 from Model.Session import Session
@@ -134,21 +133,21 @@ class TimerService:
         timer = self.timer_model.get_timer(user_id, timer_name)
         if not timer:
             return f"Таймер '{timer_name}' не найден в базе данных"
-
+        
         # Проверяем активные сессии для этого таймера
         active_sessions = self.session_model.get_active_sessions(user_id)
         for session in active_sessions:
             if session['timer_name'] == timer_name:
                 return f"Таймер '{timer_name}' уже запущен!"
-
+        
         # Запуск таймера
         now = datetime.now()
-
+        
         # Сохраняем сессию в БД
         session_id = self.session_model.start_session(user_id, timer_name, now)
         if not session_id:
             return f"Ошибка при запуске таймера '{timer_name}'"
-
+        
         return f"Таймер '{timer_name}' запущен!"
     
     def stop_timer(self, user_id, timer_name):
@@ -193,10 +192,7 @@ class TimerService:
         success = self.session_model.stop_session(session_id, now, duration_seconds)
         if not success:
             return f"Ошибка при остановке таймера '{timer_name}'"
-
-        # Сохраняем запись в Screenpipe Memory с тегом проекта
-        screenpipe_service.save_task_memory(timer_name, start_time, now, duration_seconds)
-
+        
         # Получаем актуальные данные из БД для отчета
         updated_timer = self.timer_model.get_timer(user_id, timer_name)
         total_seconds = updated_timer['total_seconds'] if updated_timer else 0

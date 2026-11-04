@@ -119,7 +119,7 @@ class TimerService:
                 else:
                     # Обычный таймер без под-таймеров
                     buttons.append([KeyboardButton(f"▶️ Старт {timer['name']}")])
-            # buttons.append([KeyboardButton(f"Отчёт")])
+            buttons.append([KeyboardButton(f"Отчёт")])
         
         return ReplyKeyboardMarkup(buttons + [stats_button], resize_keyboard=True)
     

@@ -23,6 +23,13 @@ async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE
     """Универсальный обработчик для диалогов и кнопок"""
     user_message = update.message.text
 
+    # 0. ПРОВЕРКА ОТМЕНЫ ОТЧЁТА (добавить ПЕРЕД всеми проверками)
+    if user_message in ["Отмена", "отмена", "/cancel"]:
+        # Проверяем, идет ли процесс формирования отчёта
+        if context.user_data.get('awaiting_task_id') or context.user_data.get('awaiting_comment'):
+            await report_controller.cancel_report(update, context)
+            return
+
     # 1. Сначала проверяем, не находимся ли мы в диалоге
     if context.user_data.get('awaiting_task_id'):
         await report_controller.handle_task_id_response(update, context)
@@ -42,9 +49,9 @@ async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE
         await timer_controller.show_statistics(update, context)
         return
     
-    # if user_message == "Отчёт":
-        # await report_controller.generate_report(update, context)
-        # return
+    if user_message == "Отчёт":
+        await report_controller.generate_report(update, context)
+        return
     
     if user_message == "📁 Создать под-таймер":
         await sub_timer_controller.create_sub_timer_dialog(update, context)
@@ -98,7 +105,7 @@ def main():
         return
     
     # Обновляем токены Битрикса
-    # B24Service().refreshTokens()
+    B24Service().refreshTokens()
     
     app = Application.builder().token(TOKEN).build()
     

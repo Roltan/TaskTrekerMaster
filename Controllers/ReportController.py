@@ -23,3 +23,7 @@ class ReportController(Controller):
     async def handle_comment_response(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка ответа с комментарием"""
         await self.report_service.handle_comment_response(update, context)
+
+    async def cancel_report(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик отмены формирования отчёта"""
+        await self.report_service.cancel_tracking(update, context)

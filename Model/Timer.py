@@ -40,15 +40,17 @@ class Timer(Model):
         return True
     
     def create_timer(self, user_id: int, name: str, task_id: str = '', timer_type: int = 2):
-        timer = self.get_timer(user_id, name)
-        if(timer != None): 
-            return False
-        comment_map = {3: 'кч', 2: 'нкч', 1: 'баги', 0: ''}
-        comment = comment_map.get(timer_type, '')
-        
+        """Создание таймера"""
+        # СТАРАЯ ЛОГИКА: Маппинг типов на комментарии (ЗАКОММЕНТИРОВАНО)
+        # comment_map = {3: 'кч', 2: 'нкч', 1: 'баги', 0: ''}
+        # comment = comment_map.get(timer_type, '')
+
+        # НОВАЯ ЛОГИКА: Комментарий будет генерироваться при формировании отчёта
+        # на основе под-таймеров или запроса у пользователя
+
         return self.create({
             "user_id": user_id,
             "name": name,
             "task_id": task_id,
-            "comment": comment
+            "comment": ''  # Комментарий пустой, заполнится при отчёте
         })
